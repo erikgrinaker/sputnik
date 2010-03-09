@@ -1,0 +1,25 @@
+2006-05-11: Sputnik 0.0.3
+=========================
+
+New features:
+- added asx playlist parser
+- added application icon
+
+Bugfixes:
+- use gst-python 0.10 when multiple versions are installed
+- hig dialog fixes
+
+
+2006-05-10: Sputnik 0.0.2
+=========================
+
+Bugfixes:
+- fixed crashes in gconf schema install
+- fixed crash during version check on gst-python < 0.10
+- properly escape special chars in markup text
+- forced stationlist rows to always be 3 lines high
+- added Audio, AudioVideo and Player categories to desktop entry
+
+Code changes:
+- automatically generate changelog from subversion during make dist
+

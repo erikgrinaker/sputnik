@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<actions>
+	<actiongroup name="misc">
+		<action>
+			<name>file-playlist-open</name>
+			<label>_Open Playlist...</label>
+			<stock>gtk-open</stock>
+		</action>
+
+		<action>
+			<name>file-playlist-save</name>
+			<label>_Save Playlist...</label>
+			<stock>gtk-save</stock>
+			<accel>&lt;Control&gt;S</accel>
+		</action>
+
+		<action>
+			<name>file-location</name>
+			<label>Open _Location...</label>
+			<accel>&lt;Control&gt;L</accel>
+		</action>
+
+		<action>
+			<name>help-about</name>
+			<label>_About</label>
+			<stock>gtk-about</stock>
+		</action>
+
+		<action>
+			<name>station-play</name>
+			<label>_Play</label>
+			<type>toggle</type>
+			<accel>P</accel>
+		</action>
+
+		<action>
+			<name>station-website</name>
+			<label>Visit _Website</label>
+			<stock>gtk-home</stock>
+			<accel>Home</accel>
+		</action>
+
+		<action>
+			<name>stationlist-add</name>
+			<label>_Add to Stationlist...</label>
+			<stock>gtk-add</stock>
+			<accel>&lt;Control&gt;D</accel>
+		</action>
+
+		<action>
+			<name>stationlist-open</name>
+			<label>_Play Station...</label>
+			<stock>sputnik-station</stock>
+			<accel>S</accel>
+		</action>
+
+		<action>
+			<name>quit</name>
+			<label>_Quit</label>
+			<stock>gtk-quit</stock>
+		</action>
+	</actiongroup>
+
+	<actiongroup name="placeholder">
+		<action>
+			<name>menu-file</name>
+			<label>_File</label>
+		</action>
+
+		<action>
+			<name>menu-station</name>
+			<label>_Station</label>
+		</action>
+
+		<action>
+			<name>menu-help</name>
+			<label>_Help</label>
+		</action>
+	</actiongroup>
+</actions>
+

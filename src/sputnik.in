@@ -1,0 +1,543 @@
+#!/usr/bin/env python
+
+#
+# Sputnik - an internet radio player
+# http://oss.codepoet.no/sputnik/
+# $Id: sputnik.in 97 2006-05-11 16:41:40Z erikg $
+#
+# Copyright (c) 2006 Erik Grinaker
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+#
+
+try:
+	# request gst-python 0.10 (can be parallell-
+	# installed with 0.8 and others)
+	import pygst
+	pygst.require("0.10")
+
+except AssertionError:
+	pass
+
+import gnome, gnome.ui, gobject, gst, gtk, math, sys
+
+if "@pyexecdir@" not in sys.path:
+	sys.path.insert(0, "@pyexecdir@")
+
+from sputnik import config, dialog, io, media, ui, util
+
+
+
+class Sputnik(ui.AppWindow):
+	"The Sputnik app"
+
+	def __init__(self):
+		ui.AppWindow.__init__(self, "Sputnik")
+		sys.excepthook = self.__cb_exception
+
+		if hasattr(gst, "version") == False or gst.version() < ( 0, 10 ):
+			dialog.Error(self, "Old gst-python Version", "Sputnik requires gst-python version 0.10 or newer").run()
+			sys.exit(1)
+
+		try:
+			self.__init_facilities()
+			self.__init_media()
+			self.__init_ui()
+
+		except config.ConfigError:
+			dialog.Error(self, "Missing Config Data", "Sputnik could not find its configuration data. Please try to reinstall Sputnik.").run()
+			sys.exit(1)
+
+		except media.DataError:
+			dialog.Warning(self, "Invalid station list", "The stationlist, loaded from ~/.sputnik/stations.xml, contains invalid data and won't be loaded.").run()
+
+		except media.PluginError, error:
+			dialog.Error(self, "GStreamer Plugin Error", error).run()
+			sys.exit(1)
+
+		except IOError:
+			dialog.Error(self, "Missing Data Files", "Sputnik could not find some of its data files").run()
+			sys.exit(1)
+
+
+	def __init_facilities(self):
+		"Sets up various facilities"
+
+		# load icons and stock items
+		self.itemfactory = ui.ItemFactory(self)
+
+		# load UI definitions
+		self.uimanager.add_actions_from_file(config.DIR_UI + "/actions.xml")
+		self.uimanager.add_ui_from_file(config.DIR_UI + "/menubar.xml")
+
+		# load configuration
+		self.config = config.Config()
+		self.config.check(
+			( "history/last-name", "ui/window-main-x", "history/entry-location" ),
+			"sputnik.schemas"
+		)
+
+
+	def __init_media(self):
+		"Sets up media handling"
+
+		# set up player
+		self.player = media.Player()
+		self.player.connect("state-changed", self.__cb_state_changed)
+		self.player.connect("meta-changed", self.__cb_meta_changed)
+
+		# set up station info
+		self.station		= None
+		self.stationlist	= media.StationList()
+
+		self.load_stationlist()
+		self.stationlist.connect("changed", lambda w: self.save_stationlist())
+
+
+	def __init_ui(self):
+		"Sets up the user interface"
+
+		# set up window
+		self.set_resizable(False)
+		self.set_menubar(self.uimanager.get_widget("/menubar"))
+
+		# set up window icons
+		theme	= gtk.icon_theme_get_default()
+		pixbufs	= []
+
+		for size in 48, 32, 24, 16:
+			try:
+				pixbufs.append(theme.load_icon("sputnik", size, 0))
+
+			except gobject.GError:
+				continue
+
+		if len(pixbufs) > 0:
+			gtk.window_set_default_icon_list(*pixbufs)
+
+		# set up main elements
+		buttonrow = ui.HBox()
+		self.contents.pack_start(buttonrow, False, False)
+
+		self.info = ui.StationInfo()
+		self.contents.pack_start(self.info)
+
+		# set up buttons
+		self.button_play = ui.PlayButton()
+		self.button_play.connect("toggled", self.__cb_play_toggled)
+		self.tooltips.set_tip(self.button_play, "Play or stop station")
+		buttonrow.pack_start(self.button_play, False, False)
+
+		self.button_volume = ui.VolumeButton(self.player.get_volume())
+		self.button_volume.connect("volume-changed", lambda w,d: self.player.set_volume(self.button_volume.get_volume()))
+		self.tooltips.set_tip(self.button_volume, "Change the volume level")
+		buttonrow.pack_start(self.button_volume, False, False)
+
+		buttonrow.add_space(True)
+
+		self.button_station = ui.Button(ui.STOCK_STATION)
+		self.button_station.connect("clicked", lambda w: self.play_station())
+		self.tooltips.set_tip(self.button_station, "Select a station to play")
+		buttonrow.pack_start(self.button_station, False, False)
+
+		# set up about hooks
+		gtk.about_dialog_set_url_hook(lambda d,u: gnome.url_show(u))
+		gtk.about_dialog_set_email_hook(lambda d,e: gnome.url_show("mailto:%s" % e))
+
+		# set up callbacks
+		callbacks = {
+			"file-playlist-open"	: lambda w: self.load_playlist(),
+			"file-playlist-save"	: lambda w: self.save_playlist(),
+			"file-location"		: lambda w: self.open_location(),
+			"help-about"		: lambda w: self.about(),
+			"station-play"		: self.__cb_play_toggled,
+			"station-website"	: lambda w: self.open_website(),
+			"stationlist-add"	: lambda w: self.add_station(self.station),
+			"stationlist-open"	: lambda w: self.play_station(),
+			"quit"			: lambda w: self.quit(),
+		}
+
+		for name, callback in callbacks.items():
+			self.uimanager.get_action(name).connect("activate", callback)
+
+		self.connect("delete-event", lambda w,d: self.quit())
+
+		# set up drag-and-drop
+		targets = [
+			( "text/uri-list",	0, 0 ),
+			( "text/x-moz-url",	0, 0 ),
+			( "_NETSCAPE_URL",	0, 0 ),
+		]
+
+		self.drag_dest_set(gtk.DEST_DEFAULT_ALL, targets, gtk.gdk.ACTION_COPY | gtk.gdk.ACTION_LINK )
+		self.connect("drag_data_received", self.__cb_drag_dest)
+
+		# set initial state
+		self.__state_station()
+
+
+	def __cb_drag_dest(self, widget, context, x, y, seldata, info, time, userdata = None):
+		"Handles file drops"
+
+		if seldata.data == None:
+			return
+
+		files = [ file.replace("\0", "").strip() for file in seldata.data.split("\n") if file.strip() != "" ]
+
+		if len(files) > 0:
+			self.open_location(files[0])
+
+
+	def __cb_exception(self, type, value, trace):
+		"Callback for unhandled exceptions"
+
+		if type == KeyboardInterrupt:
+			sys.exit(1)
+
+		traceback = util.trace_exception(type, value, trace)
+		sys.stderr.write(traceback)
+
+		if dialog.Exception(self, traceback).run() == True:
+			gtk.main()
+
+		else:
+			sys.exit(1)
+
+
+	def __cb_media_position(self, data = None):
+		"Callback for position queries"
+
+		if self.player.state != media.STATE_PLAYING:
+			return False
+
+		pos	= self.player.get_position()
+		dur	= self.player.get_duration()
+		pstring	= util.format_time(pos) + (dur > 0 and " / " + util.format_time(dur) or "")
+
+		format	= self.player.meta.get("format") or "unknown"
+		bitrate	= self.player.meta.get("bitrate") or 0
+		tooltip = "%s audio at %ikbps" % (format, bitrate)
+
+		self.info.set_status(ui.STOCK_PLAYING, "Playing (%s)" % util.escape_markup(pstring), tooltip)
+
+		return True
+
+
+	def __cb_meta_changed(self, widget, meta):
+		"Callback for changed meta data"
+
+		for field in ( "name", "description", "website" ):
+			if meta.get(field) in ( "", None ):
+				continue
+
+			if getattr(self.station, field) in ( "", None ) or self.station.metaupdate == True:
+				setattr(self.station, field, meta.get(field))
+
+		self.__state_station()
+
+		self.info.set_name(self.station.name)
+		self.info.set_track(meta.get("playing"))
+
+
+	def __cb_play_toggled(self, widget, data = None):
+		"Callback for play/stop toggle"
+
+		if widget.get_active() == True:
+			if self.player.state not in ( media.STATE_STOPPED, media.STATE_ERROR ):
+				return
+
+			self.player.play(self.station and self.station.streams or None)
+
+		else:
+			self.player.stop()
+
+
+	def __cb_state_changed(self, widget, state, data = None):
+		"Callback for playback state changes"
+
+		self.button_play.set_active(state not in ( media.STATE_STOPPED, media.STATE_ERROR ))
+		self.uimanager.get_action("station-play").set_active(state not in ( media.STATE_STOPPED, media.STATE_ERROR ))
+
+		if state == media.STATE_STOPPED:
+			self.info.set_track(None)
+			self.info.set_status(gtk.STOCK_DISCONNECT, "Not connected")
+
+		elif state == media.STATE_CONNECTING:
+			self.info.set_status(gtk.STOCK_NETWORK, "Contacting %s" % util.escape_markup(io.url_hostname(data)))
+
+		elif state == media.STATE_BUFFERING:
+			self.info.set_status(gtk.STOCK_NETWORK, "Buffering (%i%%)" % (data * 100))
+
+		elif state == media.STATE_PLAYING:
+			self.__cb_media_position()
+			gobject.timeout_add(250, self.__cb_media_position)
+
+		elif state == media.STATE_ERROR:
+			self.info.set_status(gtk.STOCK_DIALOG_WARNING, data)
+
+		ui.update_ui()
+
+
+	def __state_station(self):
+		"Updates widget states based on the current station"
+
+		self.set_title(self.station != None and self.station.name)
+
+		self.uimanager.get_action("file-playlist-save").set_sensitive(self.station != None)
+		self.uimanager.get_action("station-play").set_sensitive(self.station != None)
+		self.uimanager.get_action("station-website").set_sensitive(self.station != None and self.station.website not in ( "", None ))
+
+		self.button_play.set_sensitive(self.station != None)
+
+		if self.station != None:
+			self.config.set("history/last-name", self.station.name)
+			self.config.set("history/last-description", self.station.description)
+			self.config.set("history/last-website", self.station.website)
+			self.config.set("history/last-uris", self.station.streams)
+
+
+	def __set_station(self, station):
+		"Sets the current station"
+
+		if self.station == station:
+			return
+
+		self.station	= station
+
+		self.info.clear()
+		self.info.set_name(station and station.name or "")
+
+		self.__state_station()
+
+
+	def about(self):
+		"Displays an about dialog"
+
+		d = dialog.About(self)
+		d.set_name		(config.NAME)
+		d.set_logo_icon_name	("sputnik")
+		d.set_version		(config.VERSION)
+		d.set_copyright		(config.COPYRIGHT)
+		d.set_comments		(config.DESCRIPTION)
+		d.set_license		(config.LICENSE)
+		d.set_website		(config.HOMEPAGE)
+		d.set_authors		(config.AUTHORS)
+		d.run()
+
+
+	def add_station(self, station = None):
+		"Add a station to the station list"
+
+		try:
+			station = dialog.AddStation(self, station).run()
+			self.stationlist.add_station(station)
+
+		except dialog.CancelError:
+			return False
+
+
+	def load_playlist(self, file = None):
+		"Opens a playlist"
+
+		try:
+			if file == None:
+				file = dialog.OpenPlaylistFileSelector(self).run()
+
+			file = io.normpath(file)
+
+			ui.update_ui()
+
+			# load playlist (we only read 32k to avoid reading entire
+			# streams if mimetype is wrong in open_location())
+			playlist	= media.Playlist(io.read(file, 32768))
+			station		= media.Station()
+			station.name	= io.basename(file)
+			station.streams	= playlist.get_files()
+
+			ui.update_ui()
+
+			self.play_station(station)
+
+			return True
+
+
+		except IOError:
+			dialog.Error(self, "Unable to Open Playlist", "The file '%s' couldn't be opened. Make sure the file exists, and that you have proper permissions to open it." % util.escape_markup(file)).run()
+			return False
+
+		except media.DataError:
+			dialog.Error(self, "Invalid Playlist", "The file '%s' is not a valid playlist." % util.escape_markup(file)).run()
+			return False
+
+		except dialog.CancelError:
+			return False
+
+
+	def load_stationlist(self):
+		"Loads a stationlist"
+
+		try:
+			self.stationlist.import_xml(io.read("~/.sputnik/stations.xml"))
+
+		except IOError:
+			pass
+
+
+	def open_location(self, url = None):
+		"Connects to a stream"
+
+		# get url history list
+		history	= self.config.get("history/entry-location")
+		history = history and list(history) or []
+
+		# ask user if url is not given
+		if url == None:
+			try:
+				url = dialog.OpenLocation(self, history).run()
+
+			except dialog.CancelError:
+				return False
+
+		url = io.normpath(url, True)
+
+		# update url history
+		if url in history:
+			history.remove(url)
+
+		history.insert(0, url)
+		history = history[:10]
+
+		self.config.set("history/entry-location", history)
+
+		# load the url
+		mimetype = io.mimetype(url)
+
+		ui.update_ui()
+
+		if mimetype in ( "audio/x-scpls", "audio/x-mpegurl", "audio/x-ms-asx", "video/x-ms-asf" ):
+			self.load_playlist(url)
+
+		else:
+			station		= media.Station()
+			station.name	= io.basename(url)
+			station.streams.append(url)
+
+			self.play_station(station)
+
+
+	def open_website(self, url = None):
+		"Opens a website"
+
+		if url == None and self.station != None:
+			url = self.station.website
+
+		if url == None:
+			return False
+
+		gnome.url_show(url)
+
+
+	def play_station(self, station = None):
+		"Displays the station list"
+
+		try:
+			if station == None:
+				station = dialog.StationList(self, self.stationlist, self.config).run()
+
+			self.__set_station(station)
+			self.player.play(station.streams)
+
+		except dialog.CancelError:
+			pass
+
+
+	def quit(self):
+		"Quits the app"
+
+		x, y = self.get_position()
+
+		self.config.set("ui/window-main-x", x)
+		self.config.set("ui/window-main-y", y)
+
+		gtk.main_quit()
+		sys.exit()
+
+
+	def run(self, file = None):
+		"Runs the app"
+
+		x = self.config.get("ui/window-main-x")
+		y = self.config.get("ui/window-main-y")
+
+		if 0 not in (x, y):
+			self.move(x, y)
+
+		self.show_all()
+		ui.update_ui()
+
+		if file not in ( "", None ):
+			self.open_location(file)
+
+		elif self.config.get("history/last-uris") not in ( None, (), [] ):
+			station			= media.Station()
+			station.name		= self.config.get("history/last-name")
+			station.description	= self.config.get("history/last-description")
+			station.website		= self.config.get("history/last-website")
+			station.streams		= self.config.get("history/last-uris")
+			station.metaupdate	= False
+
+			self.__set_station(station)
+
+		gtk.main()
+
+
+	def save_playlist(self, station = None, file = None):
+		"Saves a station to a playlist"
+
+		try:
+			if station == None:
+				station = self.station
+
+			if station == None:
+				return False
+
+			if file == None:
+				if station.name not in ( "", None ):
+					defaultfile = station.name + ".pls"
+
+				else:
+					defaultfile = ""
+
+				file = dialog.SavePlaylistFileSelector(self, defaultfile).run()
+
+			playlist = media.Playlist()
+			playlist.add_files(station.streams)
+			io.write(file, playlist.export_pls())
+
+		except dialog.CancelError:
+			pass
+
+
+	def save_stationlist(self):
+		"Saves the stationlist"
+
+		io.write("~/.sputnik/stations.xml", self.stationlist.export_xml())
+
+
+
+if __name__ == "__main__":
+	gnome.init(config.NAME, config.NAME, gnome.libgnome_module_info_get(), sys.argv, [])
+	Sputnik().run(len(sys.argv) > 1 and sys.argv[1] or None)
+

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8" ?>
+
+<ui>
+	<menubar>
+		<menu action="menu-file">
+			<menuitem action="stationlist-open" />
+			<separator />
+			<menuitem action="file-playlist-open" />
+			<menuitem action="file-playlist-save" />
+			<menuitem action="file-location" />
+			<separator />
+			<menuitem action="quit" />
+		</menu>
+
+		<menu action="menu-station">
+			<menuitem action="station-play" />
+			<menuitem action="station-website" />
+			<separator />
+			<menuitem action="stationlist-add" />
+		</menu>
+
+		<menu action="menu-help">
+			<menuitem action="help-about" />
+		</menu>
+	</menubar>
+</ui>
+

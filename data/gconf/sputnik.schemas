@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<gconfschemafile>
+	<schemalist>
+		<schema>
+			<key>/schemas/apps/sputnik/history/entry-location</key>
+			<applyto>/apps/sputnik/history/entry-location</applyto>
+			<owner>sputnik</owner>
+			<type>list</type>
+			<list_type>string</list_type>
+			<default>[]</default>
+
+			<locale name="C">	
+				<short>List of recently opened locations</short>
+				<long>
+					A list of recently opened locations, used for
+					the entry in the Open Location dialog.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/history/last-description</key>
+			<applyto>/apps/sputnik/history/last-description</applyto>
+			<owner>sputnik</owner>
+			<type>string</type>
+			<default></default>
+
+			<locale name="C">	
+				<short>Description of the last played station</short>
+				<long>
+					The description of the last played station.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/history/last-name</key>
+			<applyto>/apps/sputnik/history/last-name</applyto>
+			<owner>sputnik</owner>
+			<type>string</type>
+			<default></default>
+
+			<locale name="C">	
+				<short>Name of the last played station</short>
+				<long>
+					The name of the last played station.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/history/last-uris</key>
+			<applyto>/apps/sputnik/history/last-uris</applyto>
+			<owner>sputnik</owner>
+			<type>list</type>
+			<list_type>string</list_type>
+			<default>[]</default>
+
+			<locale name="C">	
+				<short>URIs of last played station</short>
+				<long>
+					A list of stream URIs of the last played
+					station.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/history/last-website</key>
+			<applyto>/apps/sputnik/history/last-website</applyto>
+			<owner>sputnik</owner>
+			<type>string</type>
+			<default></default>
+
+			<locale name="C">	
+				<short>Website of the last played station</short>
+				<long>
+					The website of the last played station.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/ui/window-main-x</key>
+			<applyto>/apps/sputnik/ui/window-main-x</applyto>
+			<owner>sputnik</owner>
+			<type>int</type>
+			<default>0</default>
+
+			<locale name="C">
+				<short>Initial horizontal position of main window</short>
+				<long>
+					The horizontal position of the main window
+					on startup.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/ui/window-main-y</key>
+			<applyto>/apps/sputnik/ui/window-main-y</applyto>
+			<owner>sputnik</owner>
+			<type>int</type>
+			<default>0</default>
+
+			<locale name="C">
+				<short>Initial vertical position of main window</short>
+				<long>
+					The vertical position of the main window
+					on startup.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/ui/window-stationlist-height</key>
+			<applyto>/apps/sputnik/ui/window-stationlist-height</applyto>
+			<owner>sputnik</owner>
+			<type>int</type>
+			<default>400</default>
+
+			<locale name="C">
+				<short>Initial height of stationlist window</short>
+				<long>
+					The height of the stationlist window when opening it.
+				</long>
+			</locale>
+		</schema>
+
+		<schema>
+			<key>/schemas/apps/sputnik/ui/window-stationlist-width</key>
+			<applyto>/apps/sputnik/ui/window-stationlist-width</applyto>
+			<owner>sputnik</owner>
+			<type>int</type>
+			<default>400</default>
+
+			<locale name="C">
+				<short>Initial width of stationlist window</short>
+				<long>
+					The width of the stationlist window when opening it.
+				</long>
+			</locale>
+		</schema>
+	</schemalist>
+</gconfschemafile>
+

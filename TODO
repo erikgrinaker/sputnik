@@ -1,0 +1,14 @@
+0.0.x:
+- only use one instance (via dbus)
+- images in station list and when playing?
+- translation
+
+0.1.x:
+- recording
+- systray
+
+0.2.x:
+- applet
+- dbus-control
+- help
+
